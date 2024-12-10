@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customizable Countdown</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        /* Fireworks Animation */
+        .firework {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            animation: firework 1s infinite;
+        }
+
+        @keyframes firework {
+            0% { transform: translate(0, 0) scale(0); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)) scale(2); opacity: 0; }
+        }
+
+        /* Flashing Background Support */
+        @keyframes flash {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: var(--flash-color, white); }
+        }
+
+        .flashing-background {
+            animation: flash 1s infinite;
+        }
+
+        /* Configuration Modal */
+        #configModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #configContent {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center">
+    <!-- Configuration Modal -->
+    <div id="configModal" class="hidden">
+        <div id="configContent" class="bg-white text-black p-8 rounded-lg shadow-xl">
+            <h2 class="text-2xl font-bold mb-4">Countdown Configuration</h2>
+            
+            <div class="mb-4">
+                <label class="block mb-2">Timezone:</label>
+                <select id="timezoneSelect" class="w-full p-2 border rounded">
+                    <!-- Timezone options will be populated dynamically -->
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label class="block mb-2">Target Date and Time:</label>
+                <input type="datetime-local" id="targetDateTime" class="w-full p-2 border rounded">
+            </div>
+
+            <div class="mb-4">
+                <label class="block mb-2">First Row Text:</label>
+                <input type="text" id="firstRowText" placeholder="Company Name / Custom Text" class="w-full p-2 border rounded">
+            </div>
+
+            <div class="mb-4">
+                <label class="block mb-2">Wishing Text:</label>
+                <input type="text" id="wishingText" placeholder="Custom Wishing Message" class="w-full p-2 border rounded">
+            </div>
+
+            <div class="mb-4">
+                <label class="block mb-2">Background Options:</label>
+                <div class="flex space-x-4">
+                    <input type="radio" name="bgType" id="colorBg" value="color" checked>
+                    <label for="colorBg">Solid Color</label>
+                    
+                    <input type="radio" name="bgType" id="imageBg" value="image">
+                    <label for="imageBg">Image URL</label>
+                </div>
+            </div>
+
+            <div id="colorSection" class="mb-4">
+                <label class="block mb-2">Background Color:</label>
+                <input type="color" id="bgColor" class="w-full p-2 border rounded">
+            </div>
+
+            <div id="imageSection" class="mb-4 hidden">
+                <label class="block mb-2">Background Image URL:</label>
+                <input type="url" id="bgImageUrl" placeholder="https://example.com/background.jpg" class="w-full p-2 border rounded">
+            </div>
+
+            <div class="mb-4">
+                <label class="block mb-2">Flashing Background:</label>
+                <input type="checkbox" id="flashingBg">
+                <label for="flashingBg" class="ml-2">Enable Flashing</label>
+            </div>
+
+            <div class="flex justify-between">
+                <button id="saveConfig" class="bg-blue-500 text-white px-4 py-2 rounded">Save Configuration</button>
+                <button id="closeModal" class="bg-gray-300 text-black px-4 py-2 rounded">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Countdown Container -->
+    <div id="countdown-container" class="text-center">
+        <h1 id="firstRowDisplay" class="text-3xl mb-4"></h1>
+        <h2 class="text-2xl mb-6">New Year Countdown</h2>
+        
+        <div id="countdown" class="flex justify-center space-x-4">
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div id="days" class="text-4xl font-bold">00</div>
+                <div class="text-sm">Days</div>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div id="hours" class="text-4xl font-bold">00</div>
+                <div class="text-sm">Hours</div>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div id="minutes" class="text-4xl font-bold">00</div>
+                <div class="text-sm">Minutes</div>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div id="seconds" class="text-4xl font-bold">00</div>
+                <div class="text-sm">Seconds</div>
+            </div>
+        </div>
+
+        <button id="configBtn" class="mt-6 bg-green-500 text-white px-4 py-2 rounded">
+            ⚙️ Configure Countdown
+        </button>
+    </div>
+
+    <script>
+        // Timezone Selection
+        function populateTimezones() {
+            const timezoneSelect = document.getElementById('timezoneSelect');
+            Intl.supportedValuesOf('timeZone').forEach(timezone => {
+                const option = document.createElement('option');
+                option.value = timezone;
+                option.textContent = timezone;
+                timezoneSelect.appendChild(option);
+            });
+            // Set default to user's timezone
+            timezoneSelect.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+
+        // Fireworks Generation
+        function createFireworks() {
+            const container = document.body;
+            for (let i = 0; i < 100; i++) {
+                const firework = document.createElement('div');
+                firework.classList.add('firework');
+                firework.style.setProperty('--dx', `${(Math.random() - 0.5) * window.innerWidth}px`);
+                firework.style.setProperty('--dy', `${(Math.random() - 0.5) * window.innerHeight}px`);
+                firework.style.left = `${Math.random() * window.innerWidth}px`;
+                firework.style.top = `${Math.random() * window.innerHeight}px`;
+                container.appendChild(firework);
+            }
+        }
+
+        // Configuration Management
+        function saveConfiguration() {
+            const config = {
+                timezone: document.getElementById('timezoneSelect').value,
+                targetDateTime: document.getElementById('targetDateTime').value,
+                firstRowText: document.getElementById('firstRowText').value,
+                wishingText: document.getElementById('wishingText').value,
+                backgroundType: document.querySelector('input[name="bgType"]:checked').value,
+                backgroundColor: document.getElementById('bgColor').value,
+                backgroundImage: document.getElementById('bgImageUrl').value,
+                isFlashingEnabled: document.getElementById('flashingBg').checked
+            };
+            localStorage.setItem('countdownConfig', JSON.stringify(config));
+            loadConfiguration();
+            document.getElementById('configModal').classList.add('hidden');
+        }
+
+        function loadConfiguration() {
+            const config = JSON.parse(localStorage.getItem('countdownConfig') || '{}');
+            
+            // Apply background
+            if (config.backgroundType === 'color') {
+                document.body.style.background = config.backgroundColor;
+            } else if (config.backgroundType === 'image') {
+                document.body.style.backgroundImage = `url('${config.backgroundImage}')`;
+                document.body.style.backgroundSize = 'cover';
+                document.body.style.backgroundPosition = 'center';
+            }
+
+            // Flashing background
+            if (config.isFlashingEnabled) {
+                document.body.style.setProperty('--flash-color', config.backgroundColor);
+                document.body.classList.add('flashing-background');
+            } else {
+                document.body.classList.remove('flashing-background');
+            }
+
+            // Set first row text
+            document.getElementById('firstRowDisplay').textContent = config.firstRowText || '';
+
+            // Set target date
+            window.targetDate = config.targetDateTime ? new Date(config.targetDateTime).getTime() : new Date('January 1, 2025 00:00:00').getTime();
+        }
+
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const timeLeft = window.targetDate - now;
+
+            const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+            document.getElementById('days').innerText = days.toString().padStart(2, '0');
+            document.getElementById('hours').innerText = hours.toString().padStart(2, '0');
+            document.getElementById('minutes').innerText = minutes.toString().padStart(2, '0');
+            document.getElementById('seconds').innerText = seconds.toString().padStart(2, '0');
+
+            if (timeLeft < 0) {
+                clearInterval(countdownTimer);
+                document.getElementById('countdown-container').innerHTML = `
+                    <div class="text-center">
+                        <h1 class="text-4xl mb-4">${document.getElementById('firstRowDisplay').textContent}</h1>
+                        <h2 class="text-5xl font-bold mb-6">HAPPY NEW YEAR!</h2>
+                        <p class="text-2xl">${document.getElementById('wishingText').value || 'Wishing you joy, peace, and prosperity!'}</p>
+                    </div>
+                `;
+                createFireworks();
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('configBtn').addEventListener('click', () => {
+            document.getElementById('configModal').classList.remove('hidden');
+        });
+
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('configModal').classList.add('hidden');
+        });
+
+        document.getElementById('saveConfig').addEventListener('click', saveConfiguration);
+
+        // Background type toggle
+        document.querySelectorAll('input[name="bgType"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                document.getElementById('colorSection').style.display = 
+                    e.target.value === 'color' ? 'block' : 'none';
+                document.getElementById('imageSection').style.display = 
+                    e.target.value === 'image' ? 'block' : 'none';
+            });
+        });
+
+        // Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            populateTimezones();
+            loadConfiguration();
+            const countdownTimer = setInterval(updateCountdown, 1000);
+            updateCountdown(); // Initial call
+        });
+    </script>
+</body>
+</html>
